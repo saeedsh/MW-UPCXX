@@ -1,0 +1,35 @@
+
+include ../config.mk
+
+COUNTERDIR = ../IntelPCM
+
+HEADERS = Thread.hh ThreadPool.hh Fork.hh Job.hh Scheduler.hh sync_queue.hh HR1Scheduler.hh HR2Scheduler.hh HR3Scheduler.hh HR4Scheduler.hh $(COUNTERDIR)/test.h
+IMPLEMENTATION = Thread.cc DecentralThreadPool.cc DecentralFork.cc Job.cc DecentralScheduler.cc WSScheduler.cc HR1Scheduler.cc HR2Scheduler.cc HR3Scheduler.cc HR4Scheduler.cc 
+MONITORS =  libperf.h perf_event.h gettime.hh timers.hh  libperf.c
+
+SOURCES = $(HEADERS) $(IMPLEMENTATION) $(MONITORS)
+
+COMMONOBJECTS = Thread.o libperf.o Job.o
+COUNTEROBJECTS = $(COUNTERDIR)/msr.o $(COUNTERDIR)/pci.o $(COUNTERDIR)/cpucounters.o $(COUNTERDIR)/client_bw.o
+DECENTRALOBJECTS = $(COMMONOBJECTS) HR1Scheduler.o HR2Scheduler.o HR3Scheduler.o HR4Scheduler.o  WSScheduler.o DecentralThreadPool.o DecentralFork.o DecentralScheduler.o
+OBJECTS = $(COMMONOBJECTS)  Fork.o Scheduler.o
+
+all: decentrallibthrpool.a 
+
+libperf.o:	libperf.c libperf.h perf_event.h
+	$(CC) -c $(CFLAGS) $(PFLAGS) libperf.c -o libperf.o
+
+%.o:	%.cc $(SOURCES) #%.hh
+	$(CC) -c $(CFLAGS) $(PFLAGS) $(IFLAGS) $< -o $@ 
+
+decentrallibthrpool.a:	$(SOURCES) $(DECENTRALOBJECTS)
+	$(AR) ../decentrallibthrpool.a $(DECENTRALOBJECTS) $(COUNTEROBJECTS)
+	$(RANLIB) ../decentrallibthrpool.a
+
+#libthrpool.a:	$(SOURCES) $(OBJECTS)
+#	$(AR) ../libthrpool.a $(OBJECTS)
+#	$(RANLIB) ../libthrpool.a
+
+clean:
+	rm -rf *.o *~ decentrallibthrpool.a
+

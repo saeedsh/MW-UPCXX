@@ -1,0 +1,174 @@
+#include <iostream>
+#include <cstdlib>
+#include <math.h>
+
+#include "Job.hh"
+#include "machine-config.hh"
+#include "parse-args.hh"
+#include "utils.hh"
+#include "sequence.hh"
+
+using namespace std;
+
+#define MATMUL_BASE (1<<7)
+
+template <class ETYPE>
+struct denseMat {
+  int numrows, numcols;
+  int rowoff, coloff;
+  int rowsize;
+  ETYPE* Values;
+
+  ETYPE& operator() (int row, int col) {
+    return Values[(rowoff+row)*rowsize + (coloff + col)];
+  }
+  
+  denseMat(int r, int c, ETYPE* V) : numrows(r), numcols(c), Values(V), rowoff(0), coloff(0), rowsize(c) {}
+  denseMat(int r, int c, ETYPE* V, int roff, int coff, int s) : numrows(r), numcols(c), Values(V), rowoff(roff), coloff(coff), rowsize(s) {}
+  
+  denseMat topLeft() {
+    denseMat newMat(numrows/2, numcols/2, Values, rowoff, coloff, rowsize);
+    return newMat;
+  }
+
+  denseMat topRight() {
+    denseMat newmat(numrows/2, numcols - numcols/2, Values, rowoff, coloff+numcols/2, rowsize);
+    return newmat;
+  }    
+
+  denseMat botLeft() {
+    denseMat newmat(numrows - numrows/2, numcols/2, Values, rowoff+numrows/2, coloff, rowsize);
+    return newmat;
+  }
+
+  denseMat botRight() {
+    denseMat newmat(numrows - numrows/2, numcols - numcols/2, Values, rowoff+numrows/2, coloff+numcols/2, rowsize);
+    return newmat;
+  }
+
+  lluint size () { return numrows*numcols*sizeof (ETYPE); }  // Not really accurate, but ok for now
+};
+
+template <class E>
+void seqIterMul(denseMat<E> A, denseMat<E> B, denseMat<E> C) {
+  int a_base_ptr = A.rowoff*A.rowsize + A.coloff;
+  int b_base = B.rowoff*B.rowsize + B.coloff;
+  int c_base_ptr = C.rowoff*C.rowsize + C.coloff;
+
+  for (int i = 0; i < C.numrows; i++, a_base_ptr += A.rowsize, c_base_ptr += C.rowsize) {
+    for (int j = 0; j < C.numcols; j++) {
+      E& c = C.Values[c_base_ptr+j];
+      int b_base_ptr = b_base + j;
+      for (int k = 0; k < A.numcols; k++, b_base_ptr+=B.rowsize) {
+	c += A.Values[a_base_ptr+k]*B.Values[b_base_ptr];
+      }
+    }
+  }
+}
+
+
+template<class E>
+class MatMulJob : public HR2Job {
+  denseMat<E> _A, _B, _C;
+  int _step;
+ public :
+  MatMulJob(denseMat<E> A, denseMat<E> B, denseMat<E> C, int step=0, bool del=true) 
+    : HR2Job (del), _A(A), _B(B), _C(C), _step(step) {}
+  
+  lluint size (const int block_size) { 
+    return _A.size() + _B.size() + _C.size();
+  }
+  lluint strand_size (const int block_size) {
+    if (STRAND_SIZE_MODE==1) {
+      return size(block_size);
+    } else {
+      if (_C.numrows<=MATMUL_BASE && _step<=1) {
+	return size(block_size);
+      } else {
+	return STRAND_SIZE;
+      }
+    }
+  }
+  
+  void function() {
+    if (_step > 1) {
+      join();
+    } else if (_C.numrows <= MATMUL_BASE) {
+      seqIterMul(_A,_B,_C);
+      join();
+    } else {
+      Job **forked = new Job*[4];
+      MatMulJob *cont = NULL;
+      switch (_step) {
+      case 0: 
+	forked[0] = new MatMulJob(_A.topLeft(),_B.topLeft(),_C.topLeft());
+	forked[1] = new MatMulJob(_A.topLeft(),_B.topRight(),_C.topRight());
+	forked[2] = new MatMulJob(_A.botLeft(),_B.topLeft(),_C.botLeft());
+	forked[3] = new MatMulJob(_A.botLeft(),_B.topRight(),_C.botRight());
+	cont = new MatMulJob(_A,_B,_C,1);
+	break;
+      case 1:
+	forked[0] = new MatMulJob(_A.topRight(),_B.botLeft(),_C.topLeft());
+	forked[1] = new MatMulJob(_A.topRight(),_B.botRight(),_C.topRight());
+	forked[2] = new MatMulJob(_A.botRight(),_B.botLeft(),_C.botLeft());
+	forked[3] = new MatMulJob(_A.botRight(),_B.botRight(),_C.botRight());
+	cont = new MatMulJob(_A,_B,_C,2);
+	break;
+      }
+      fork(4, forked, cont);
+    }
+  }
+};
+
+template <class E>
+void checkMatMul(denseMat<E> A, denseMat<E> B, denseMat<E> C) {
+  denseMat<E> D(C.numrows,C.numcols,new E[C.numrows*C.numcols]);
+  for (int i = 0; i < D.numrows * D.numcols; i++) {
+    D.Values[i] = 0;
+  }
+
+  for (int i = 0; i < D.numrows; i++) 
+    for (int j = 0; j < D.numcols; j++) 
+      for (int k = 0; k < A.numcols; k++) 
+	D(i,j) += A(i,k)*B(k,j);
+  
+  for (int i=0; i<C.numrows * C.numcols ; i++) {
+    if (C.Values[i] != D.Values[i]) {
+      printf("whoops at cell %d\n", i);
+      return;
+    } 
+  }
+  printf("good\n");
+}
+ 
+#define E int
+
+int
+main (int argv, char **argc) {
+  int n = (-1==get_size(argv, argc,2)) ? (1<<10) : get_size(argv, argc,2);
+
+  Scheduler *sched=create_scheduler(argv, argc);
+  
+  int hugepage_id = alloc_hugetlb(3*sizeof(E)*n*n);
+  char *space = (char*)translate_hugetlb(hugepage_id);
+  stripe_teach(space,3*sizeof(E)*n*n);
+
+  //E* space = newA(E,3*n*n);
+  denseMat<E> A(n,n,(E*)(space));
+  denseMat<E> B(n,n,(E*)(space+sizeof(E)*n*n));
+  denseMat<E> C(n,n,(E*)(space+2*sizeof(E)*n*n));
+  for (int i=0; i<n*n; i++) {
+    A.Values[i] = i;
+    B.Values[i] = i;
+    C.Values[i] = 0;
+  }
+  MatMulJob<E> * root = new MatMulJob<E>(A,B,C,0,false);
+
+  startTime();
+  tp_init(num_procs, map, sched, root);
+  tp_sync_all();
+  nextTime("Matrix multiply : ");
+
+  free_hugetlb(hugepage_id);
+  //checkMatMul(A,B,C);
+}
