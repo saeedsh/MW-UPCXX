@@ -144,7 +144,7 @@ main (int argv, char **argc) {
   for (int i=0; i<m*p; ++i) 
     B[i] = 2*i; 
 
-  FIND_MACHINE;
+  //FIND_MACHINE;
   flush_cache(num_procs,sizes[1]);
 
   Scheduler *sched=create_scheduler (argv, argc);

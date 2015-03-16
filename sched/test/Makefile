@@ -7,7 +7,8 @@ OBJECTS = Thread.o ThreadPool.o Job.o Fork.o Scheduler.o test.o
 HOSTNAME = $(shell uname -n | tr "." "\n" | head -n 1) 
 
 MEMFLAGS = -D HUGE_PAGE_SIZE=2097152 -D STRIPE_SOCKETS=$(STRIPE_SOCKETS)
-DFLAGS = -D FIND_MACHINE=$(HOSTNAME) -D STRAND_SIZE_MODE=$(STRAND_SIZE_MODE) $(MEMFLAGS)
+#DFLAGS = -D FIND_MACHINE=$(HOSTNAME) -D STRAND_SIZE_MODE=$(STRAND_SIZE_MODE) $(MEMFLAGS)
+DFLAGS = -D FIND_MACHINE= -D STRAND_SIZE_MODE=$(STRAND_SIZE_MODE) $(MEMFLAGS)
 
 CPFLAGS = $(CFLAGS) $(PFLAGS)
 
@@ -89,10 +90,10 @@ numProcTest:	../$(LIBVER)  machine-config.hh numProcTest.cc numProcTest.o
 	$(CCP) $(CPFLAGS) -o numProcTest numProcTest.o ../$(LIBVER)   $(LFLAGS)
 
 Cilk-RRM:	Cilk-RRM.cc
-	$(CCP) $(CPFLAGS) $(CILK_FLAGS) $(MEMFLAGS) -I ../IntelPCM/ -o Cilk-RRM Cilk-RRM.cc $(COUNTEROBJECTS)
+	$(CCP) $(CPFLAGS) $(LFLAGS) $(CILK_FLAGS) $(MEMFLAGS) -I ../IntelPCM/ -o Cilk-RRM Cilk-RRM.cc $(COUNTEROBJECTS)
 
 Cilk-RRG:	Cilk-RRG.cc
-	$(CCP) $(CPFLAGS) $(CILK_FLAGS) $(MEMFLAGS) -I ../IntelPCM/ -o Cilk-RRG Cilk-RRG.cc $(COUNTEROBJECTS)
+	$(CCP) $(CPFLAGS) $(LFLAGS) $(CILK_FLAGS) $(MEMFLAGS) -I ../IntelPCM/ -o Cilk-RRG Cilk-RRG.cc $(COUNTEROBJECTS)
 
 clean:
 	rm -rf *.o *~ thrtest $(EXECS) $(CILK_EXECS)

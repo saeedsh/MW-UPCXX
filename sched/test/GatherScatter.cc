@@ -43,7 +43,7 @@ main (int argv, char **argc) {
     B[i] = 0; B_ptr[i] = B+i;
   }
 
-  FIND_MACHINE;
+ // FIND_MACHINE;
   Scheduler *sched=create_scheduler (argv, argc);
 
   flush_cache(num_procs,sizes[1]);

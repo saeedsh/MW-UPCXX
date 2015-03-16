@@ -41,7 +41,7 @@ main (int argv, char **argc) {
   }
 
 
-  FIND_MACHINE;
+ // FIND_MACHINE;
   Scheduler *sched=create_scheduler (argv, argc);
   flush_cache(num_procs,sizes[1]);  
   std::cout<<"Len: "<<LEN<<std::endl;
