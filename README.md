@@ -17,4 +17,6 @@ cd $HOME
 mkdir b-gcc 
 cd b-gcc
 $HOME/cilkplus-gcc/configure --prefix=$HOME/cilkplus-install --enable-languages="c,c++" --disable-multilib
+make
+make install
 ```
