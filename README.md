@@ -10,6 +10,7 @@ To be able to compile the code, we need to have GCC Cilk.
 cd $HOME
 git clone http://gcc.gnu.org/git/gcc.git cilkplus-gcc
 cd cilkplus-gcc
+git checkout -b my_cilkplus_branch origin/cilkplus
 ./contrib/download_prerequisites
 
 cd $HOME
